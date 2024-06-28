@@ -4,17 +4,20 @@ from tkinter import ttk
 class EvolutionSimulator:
     def __init__(self, root):
         self.root = root
-        self.root.title("生物演化模拟器")
+        self.root.title("演化之路")
 
         # 初始化变量
         self.time_passed = 0.0  # 经过的时间，单位为ka
-        self.species_count = 1000  # 初始物种数量
+        self.species_count = 1000  # 初始种群数量
         self.reproduction_rate = 0.01  # 繁殖率
         self.death_rate = 0.005  # 死亡率
         self.mutation_rate = 0.001  # 基因突变率初始值
         self.mutation_points = 1000.0  # 基因突变值
         self.complexity = 0  # 复杂度
+        self.focus_attribute = "体型"  # 初始重心
         self.running = False
+        self.assimilation_boost_active = False
+        self.assimilation_boost_duration = 0.0
 
         # 初始物种属性
         self.attributes = {
@@ -31,7 +34,7 @@ class EvolutionSimulator:
         # 创建UI组件
         self.create_widgets()
 
-        # 更新物种数量的任务
+        # 更新种群数量的任务
         self.update_task = None
 
     def create_widgets(self):
@@ -39,8 +42,8 @@ class EvolutionSimulator:
         self.time_label = ttk.Label(self.root, text=f"时间: {self.time_passed:.1f} ka")
         self.time_label.pack()
 
-        # 物种数量显示标签
-        self.species_label = ttk.Label(self.root, text=f"物种数量: {self.format_species_count(self.species_count)}")
+        # 种群数量显示标签
+        self.species_label = ttk.Label(self.root, text=f"种群数量: {self.format_species_count(self.species_count)}")
         self.species_label.pack()
 
         # 属性显示
@@ -62,6 +65,14 @@ class EvolutionSimulator:
         self.complexity_label = ttk.Label(self.root, text=f"复杂度: {self.complexity}")
         self.complexity_label.pack()
 
+        # 重心选择
+        self.focus_label = ttk.Label(self.root, text="选择重心:")
+        self.focus_label.pack()
+        self.focus_combobox = ttk.Combobox(self.root, values=list(self.attributes.keys()), state="readonly")
+        self.focus_combobox.set(self.focus_attribute)
+        self.focus_combobox.pack()
+        self.focus_combobox.bind("<<ComboboxSelected>>", self.change_focus)
+
         # 升级功能按钮
         self.upgrade_buttons = []
         self.upgrades = {
@@ -77,7 +88,7 @@ class EvolutionSimulator:
         # 已购买突变显示
         self.purchased_label = ttk.Label(self.root, text="已购买突变:")
         self.purchased_label.pack()
-        self.purchased_mutations_text = tk.Text(self.root, height=5, width=50)
+        self.purchased_mutations_text = tk.Text(self.root, height=5, width=50, state="disabled")
         self.purchased_mutations_text.pack()
 
         # 继续/暂停按钮
@@ -105,17 +116,27 @@ class EvolutionSimulator:
         # 更新时间
         self.time_passed += 0.1
 
-        # 计算新的物种数量
+        # 检查同化加成是否激活
+        if self.assimilation_boost_active:
+            self.assimilation_boost_duration -= 0.1
+            if self.assimilation_boost_duration <= 0:
+                self.reproduction_rate /= 10
+                self.assimilation_boost_active = False
+
+        # 计算新的种群数量
         births = self.species_count * self.reproduction_rate  # 出生数量
         deaths = self.species_count * self.death_rate  # 死亡数量
-        self.species_count += births - deaths  # 更新物种数量
+        self.species_count += births - deaths  # 更新种群数量
 
         # 更新基因突变值，随时间增加并受种群数量影响
         self.mutation_points += (self.species_count * 0.000001)
 
+        # 更新重心属性，随时间增加并受种群数量影响
+        self.attributes[self.focus_attribute] += (self.species_count * 0.0000001)
+
         # 更新标签
         self.time_label.config(text=f"时间: {self.time_passed:.1f} ka")
-        self.species_label.config(text=f"物种数量: {self.format_species_count(self.species_count)}")
+        self.species_label.config(text=f"种群数量: {self.format_species_count(self.species_count)}")
         self.mutation_label.config(text=f"基因突变率: {self.mutation_rate:.4f}")
         self.mutation_points_label.config(text=f"基因突变值: {self.mutation_points:.2f}")
         self.complexity_label.config(text=f"复杂度: {self.complexity}")
@@ -132,6 +153,8 @@ class EvolutionSimulator:
             self.mutation_points -= 100
             upgrade_function()
             self.complexity += 1  # 增加复杂度
+            self.species_count = 1  # 购买突变后将种群数量设为1
+            self.activate_assimilation_boost()
             self.purchased_mutations.append(name)
             self.update_attributes_display()
 
@@ -139,6 +162,12 @@ class EvolutionSimulator:
             for button in self.upgrade_buttons:
                 if button.cget("text") == name:
                     button.pack_forget()
+
+    def activate_assimilation_boost(self):
+        if not self.assimilation_boost_active:
+            self.reproduction_rate *= 10
+            self.assimilation_boost_duration = 10.0
+            self.assimilation_boost_active = True
 
     def upgrade_spinal_cord(self):
         self.attributes["体型"] *= 1.10
@@ -152,6 +181,9 @@ class EvolutionSimulator:
         self.attributes["体型"] += 15
         self.attributes["速度"] *= 1.05
 
+    def change_focus(self, event):
+        self.focus_attribute = self.focus_combobox.get()
+
     def update_attributes_display(self):
         # 更新属性显示
         for attribute, value in self.attributes.items():
@@ -160,8 +192,13 @@ class EvolutionSimulator:
         self.complexity_label.config(text=f"复杂度: {self.complexity}")
 
         # 更新已购买突变显示
+        self.purchased_mutations_text.config(state="normal")
         self.purchased_mutations_text.delete(1.0, tk.END)
         self.purchased_mutations_text.insert(tk.END, "\n".join(self.purchased_mutations))
+        self.purchased_mutations_text.config(state="disabled")
+
+        # 更新种群数量显示
+        self.species_label.config(text=f"种群数量: {self.format_species_count(self.species_count)}")
 
 # 创建Tkinter窗口
 root = tk.Tk()
